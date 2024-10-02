@@ -22,6 +22,7 @@ fun main(args: Array<String>) {
         // todo handle connections properly (validation, check if open, etc)
         channel.connect(address);
         println("Successfully connected to the server!")
+        println("--------------------------------------------------")
 
         while (channel.isOpen) {
             println(
@@ -38,48 +39,71 @@ fun main(args: Array<String>) {
             val messageToServer = when (messageType) {
                 CLOSE_CONNECTION_NUM -> {
                     channel.close()
-                    continue
+                    println("Connection closed")
+                    return
                 }
-                TYPES.OK -> composeOk()
+                TYPES.OK -> {
+                    println("Sending OK...")
+                    composeOk()
+                }
                 TYPES.WRITE -> {
                     println("A write message needs content. Please enter it now:")
-                    composeWrite(readlnOrNull() ?: "")
+                    val content = readlnOrNull() ?: ""
+                    println("Sending WRITE...")
+                    composeWrite(content)
                 }
-                TYPES.CLEAR -> composeClear()
+                TYPES.CLEAR -> {
+                    println("Sending CLEAR...")
+                    composeClear()
+                }
                 TYPES.ERROR -> {
                     println("An error message can be specified. Please enter it now or hit enter to leave it empty:")
-                    composeError(readlnOrNull() ?: "")
+                    val errorMessage = readlnOrNull() ?: ""
+                    println("Sending ERROR...")
+                    composeError(errorMessage)
                 }
-                TYPES.PING -> composePing()
+                TYPES.PING -> {
+                    println("Sending PING...")
+                    composePing()
+                }
                 else -> {
                     println("There is no message associated with this input")
+                    println("--------------------------------------------------")
                     continue
                 }
             }
 
             channel.write(messageToServer);
-            println("Message sent to the server!")
+            println("Message sent!")
+
+            if (messageType == TYPES.OK || messageType == TYPES.ERROR) {
+                println("--------------------------------------------------")
+                continue
+            }
 
             val unvalidatedChannelDataResult = readChannelMessage(channel)
             unvalidatedChannelDataResult.onSuccess { unvalidatedData ->
                 val validatedChannelDataResult = validateChannelData(unvalidatedData)
                 validatedChannelDataResult.onSuccess { validatedData ->
                     when (validatedData.type) {
-                        TYPES.OK -> println("Server responds OK")
+                        TYPES.OK -> {
+                            println("Received OK from server")
+                        }
                         TYPES.ERROR -> {
-                            println("Server responds with error")
+                            println("Received ERROR from server")
                             println("Error: ${validatedData.content}")
                         }
-                        else -> println("Server responds with an illegal message type")
+                        else -> println("Received unexpected message type from server")
                     }
                 }.onFailure { validationError ->
-                    println(validationError.message)
+                    println("Validation of the server response failed")
+                    println("Error: ${validationError.message}")
                 }
-            }.onFailure { readingError ->
-                println(readingError.message)
+            }.onFailure { connectionClosedException ->
+                println(connectionClosedException.message)
+                return
             }
+            println("--------------------------------------------------")
         }
-
-        println("The connection to the server has been closed")
     }
 }

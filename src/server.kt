@@ -3,6 +3,7 @@ import java.net.StandardProtocolFamily
 import java.net.UnixDomainSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.ServerSocketChannel
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -27,37 +28,66 @@ fun main(args: Array<String>) {
         // listen for incoming connections
         val clientChannel = serverChannel.accept();
         println("Client connection accepted");
+        println("--------------------------------------------------")
         while (true) {
             val unvalidatedChannelDataResult = readChannelMessage(clientChannel);
             unvalidatedChannelDataResult.onSuccess { unvalidatedData ->
                 val validatedChannelDataResult = validateChannelData(unvalidatedData)
                 validatedChannelDataResult.onSuccess { validatedData ->
                     val messageToClient: ByteBuffer? = when (validatedData.type) {
-                        TYPES.OK -> null
+                        TYPES.OK -> {
+                            println("Received OK Message from client")
+                            println("Sending no response")
+                            println("--------------------------------------------------")
+                            null
+                        }
                         TYPES.WRITE -> {
+                            println("Received WRITE Message from client")
+                            println("Writing content to the file...")
                             FileOutputStream(filePath, true).write(validatedData.content.array());
                             FileOutputStream(filePath, true).write(10);
+                            println("Content written!")
+                            println("Responding OK...")
                             composeOk();
                         }
                         TYPES.CLEAR -> {
+                            println("Received CLEAR Message from client")
+                            println("Clearing file...")
                             FileOutputStream(filePath).write(ByteArray(0));
+                            println("File cleared!")
+                            println("Responding OK...")
                             composeOk()
                         }
                         TYPES.ERROR -> {
-                            println(validatedData.content);
-                            composeOk()
+                            println("Received ERROR Message from client")
+                            println("Error message: ${StandardCharsets.UTF_8.decode(validatedData.content.flip())}")
+                            println("Sending no response")
+                            println("--------------------------------------------------")
+                            null
                         }
                         TYPES.PING -> {
+                            println("Received PING Message from client")
+                            println("Responding OK...")
                             composeOk()
                         }
                         else -> composeError("The message is valid but the server failed to determine it's type")
                     }
-                    if (messageToClient != null) clientChannel.write(messageToClient)
+                    if (messageToClient != null) {
+                        clientChannel.write(messageToClient)
+                        println("Response sent!")
+                        println("--------------------------------------------------")
+                    }
                 }.onFailure { validationException ->
+                    println("Validation of the message failed")
+                    println("Error: ${validationException.message}")
+                    println("Responding with ERROR")
                     clientChannel.write(composeError(validationException.message ?: ""))
+                    println("Response sent!")
+                    println("--------------------------------------------------")
                 }
-            }.onFailure { readingException ->
-                println(readingException.message)
+                // todo other exceptions besides connectionClosed may appear (faulty client, doesn't read buffer and closes connection)
+            }.onFailure { connectionClosedException ->
+                println(connectionClosedException.message)
                 return
             }
         }

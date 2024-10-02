@@ -3,7 +3,7 @@ import java.nio.channels.SocketChannel
 
 const val HEADER_SIZE = 8
 
-class ConnectionClosedException(): Exception("The client has closed the connection. How rude!")
+class ConnectionClosedException(): Exception("The connection has been closed byt the other party. How rude!")
 
 data class ChannelData(val type: Byte, val numHeaderBytesRead: Int, val numContentBytesRead: Int,
                        val contentLength: Int, val content: ByteBuffer)
