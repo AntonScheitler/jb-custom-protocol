@@ -10,7 +10,6 @@ class OkMessageContentNotEmptyException: ContentNotEmptyException("OK")
 class ClearMessageContentNotEmptyException: ContentNotEmptyException("CLEAR")
 class PingMessageContentNotEmptyException: ContentNotEmptyException("PING")
 
-// todo figure out how to use 1, 2, 3, 4, 5 instead of Byte as the type for @param type
 data class ValidatedChannelData(val type: Byte, val content: ByteBuffer)
 
 fun validateChannelData(data: ChannelData) : Result<ValidatedChannelData> {

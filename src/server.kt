@@ -30,7 +30,7 @@ fun main(args: Array<String>) = runBlocking {
         throw IOException("File must be regular")
     }
 
-    // bind to the socket in the argument
+    // bind to the socket
     val address = UnixDomainSocketAddress.of(socketPath);
     ServerSocketChannel.open(StandardProtocolFamily.UNIX).bind(address).use { serverChannel ->
         println("Server listening at address: ${serverChannel.localAddress}");
@@ -51,15 +51,17 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: String, corouti
     printlnWithCoroutineId(coroutineId, "Client connection accepted")
     printlnWithCoroutineId(coroutineId, "--------------------------------------------------")
     while (clientChannel.isOpen) {
+        // read message from the channel
         val unvalidatedChannelDataResult = readChannelMessage(clientChannel);
         unvalidatedChannelDataResult.onSuccess { unvalidatedData ->
+            // validate the message just read
             val validatedChannelDataResult = validateChannelData(unvalidatedData)
             validatedChannelDataResult.onSuccess { validatedData ->
+                // respond according to the type of the message (if it is valid)
                 val messageToClient: ByteBuffer? = when (validatedData.type) {
                     TYPES.OK -> {
                         printlnWithCoroutineId(coroutineId, "Received OK Message")
                         printlnWithCoroutineId(coroutineId, "Sending no response")
-                        printlnWithCoroutineId(coroutineId, "--------------------------------------------------")
                         null
                     }
                     TYPES.WRITE -> {
@@ -81,7 +83,6 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: String, corouti
                         printlnWithCoroutineId(coroutineId, "Received ERROR Message")
                         printlnWithCoroutineId(coroutineId, "Error: ${StandardCharsets.UTF_8.decode(validatedData.content.flip())}")
                         printlnWithCoroutineId(coroutineId, "Sending no response")
-                        printlnWithCoroutineId(coroutineId, "--------------------------------------------------")
                         null
                     }
                     TYPES.PING -> {
@@ -89,29 +90,28 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: String, corouti
                         printlnWithCoroutineId(coroutineId, "Responding OK...")
                         composeOk()
                     }
-                    // todo refactor, so else wont show up here
-                    else -> composeError("The message is valid but the server failed to determine it's type")
+                    else -> composeError(UnknownMessageTypeException().message ?: "")
                 }
                 if (messageToClient != null) {
                     // todo might fail
                     clientChannel.write(messageToClient)
                     printlnWithCoroutineId(coroutineId, "Response sent!")
-                    printlnWithCoroutineId(coroutineId, "--------------------------------------------------")
                 }
             }.onFailure { validationException ->
+                // reply with an error if the validation has failed
                 printlnWithCoroutineId(coroutineId, "Validation of the message failed")
                 printlnWithCoroutineId(coroutineId, "Error: ${validationException.message}")
                 printlnWithCoroutineId(coroutineId, "Responding with ERROR")
                 // todo might fail
                 clientChannel.write(composeError(validationException.message ?: ""))
                 printlnWithCoroutineId(coroutineId, "Response sent!")
-                printlnWithCoroutineId(coroutineId, "--------------------------------------------------")
             }
             // todo other exceptions besides connectionClosed may appear (faulty client, doesn't read buffer and closes connection)
         }.onFailure { connectionClosedException ->
             printlnWithCoroutineId(coroutineId, connectionClosedException.message ?: "")
             return
         }
+        printlnWithCoroutineId(coroutineId, "--------------------------------------------------")
     }
 }
 
