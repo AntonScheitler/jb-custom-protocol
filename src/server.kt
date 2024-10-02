@@ -2,6 +2,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.FileOutputStream
+import java.io.IOException
 import java.net.StandardProtocolFamily
 import java.net.UnixDomainSocketAddress
 import java.nio.ByteBuffer
@@ -10,32 +11,36 @@ import java.nio.channels.SocketChannel
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.pathString
 
 fun main(args: Array<String>) = runBlocking {
-    // todo validate input
     if (args.size != 2) {
-        println("Usage: ./server [SOCKET_PATH] [FILE_PATH]")
+        throw RuntimeException("Usage: ./server [SOCKET_PATH] [FILE_PATH]")
     }
     val socketPath = args[0];
     Files.deleteIfExists(Path.of(socketPath));
 
-    // todo validate input
-    // get the path to the file from stdin
-    val filePath = args[1]
+    val filePath = Path.of(args[1])
+    // create file if it doesn't exist
+    if (!Files.exists(filePath)) {
+        Files.createFile(filePath)
+    }
+    // file must be regular to be written to and/or cleared
+    if (!Files.isRegularFile(filePath)) {
+        throw IOException("File must be regular")
+    }
 
     // bind to the socket in the argument
     val address = UnixDomainSocketAddress.of(socketPath);
     ServerSocketChannel.open(StandardProtocolFamily.UNIX).bind(address).use { serverChannel ->
-        // todo create loop / coroutine to handle client connections
         println("Server listening at address: ${serverChannel.localAddress}");
 
-        // todo use coroutines
         // listen for incoming connections
         var id = 0
         while (true) {
             val clientChannel = serverChannel.accept()
             launch(Dispatchers.IO) {
-                handleClient(clientChannel, filePath, id)
+                handleClient(clientChannel, filePath.pathString, id)
             }
             id++
         }
@@ -59,24 +64,22 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: String, corouti
                     }
                     TYPES.WRITE -> {
                         printlnWithCoroutineId(coroutineId, "Received WRITE Message")
-                        printlnWithCoroutineId(coroutineId, "Writing content to the file...")
+                        // todo possible IO Exception
                         FileOutputStream(filePath, true).write(validatedData.content.array());
                         FileOutputStream(filePath, true).write(10);
-                        printlnWithCoroutineId(coroutineId, "Content written!")
                         printlnWithCoroutineId(coroutineId, "Responding OK...")
                         composeOk();
                     }
                     TYPES.CLEAR -> {
                         printlnWithCoroutineId(coroutineId, "Received CLEAR Message")
-                        printlnWithCoroutineId(coroutineId, "Clearing file...")
+                        // todo possible IO Exception
                         FileOutputStream(filePath).write(ByteArray(0));
-                        printlnWithCoroutineId(coroutineId, "File cleared!")
                         printlnWithCoroutineId(coroutineId, "Responding OK...")
                         composeOk()
                     }
                     TYPES.ERROR -> {
                         printlnWithCoroutineId(coroutineId, "Received ERROR Message")
-                        printlnWithCoroutineId(coroutineId, "Error message: ${StandardCharsets.UTF_8.decode(validatedData.content.flip())}")
+                        printlnWithCoroutineId(coroutineId, "Error: ${StandardCharsets.UTF_8.decode(validatedData.content.flip())}")
                         printlnWithCoroutineId(coroutineId, "Sending no response")
                         printlnWithCoroutineId(coroutineId, "--------------------------------------------------")
                         null
@@ -86,9 +89,11 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: String, corouti
                         printlnWithCoroutineId(coroutineId, "Responding OK...")
                         composeOk()
                     }
+                    // todo refactor, so else wont show up here
                     else -> composeError("The message is valid but the server failed to determine it's type")
                 }
                 if (messageToClient != null) {
+                    // todo might fail
                     clientChannel.write(messageToClient)
                     printlnWithCoroutineId(coroutineId, "Response sent!")
                     printlnWithCoroutineId(coroutineId, "--------------------------------------------------")
@@ -97,6 +102,7 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: String, corouti
                 printlnWithCoroutineId(coroutineId, "Validation of the message failed")
                 printlnWithCoroutineId(coroutineId, "Error: ${validationException.message}")
                 printlnWithCoroutineId(coroutineId, "Responding with ERROR")
+                // todo might fail
                 clientChannel.write(composeError(validationException.message ?: ""))
                 printlnWithCoroutineId(coroutineId, "Response sent!")
                 printlnWithCoroutineId(coroutineId, "--------------------------------------------------")

@@ -7,12 +7,11 @@ class ConnectionClosedException(): Exception("The connection has been closed by 
 
 data class ChannelData(val type: Byte, val numHeaderBytesRead: Int, val numContentBytesRead: Int,
                        val contentLength: Int, val content: ByteBuffer)
-// todo custom exception (no message?)
 
 // Reads a message from the stream so it can be validated or throws an error if the client has closed the connection
+// todo more error may appear
 fun readChannelMessage(channel: SocketChannel): Result<ChannelData> {
     val headerBuffer = ByteBuffer.allocate(HEADER_SIZE);
-    // todo handle closed connection (numReadBytes == 1)
     val numHeaderBytesRead = channel.read(headerBuffer);
 
     // if the number returned by channel.read() is -1, then end-of-stream has been reached, which means that the client has closed the connection
@@ -28,7 +27,6 @@ fun readChannelMessage(channel: SocketChannel): Result<ChannelData> {
     }
 
     val contentBuffer = ByteBuffer.allocate(contentLength);
-    // todo handle messages, that are longer than 8B + contentLength
     val numContentBytesRead = channel.read(contentBuffer);
 
     return Result.success(
