@@ -36,13 +36,13 @@ fun main(args: Array<String>) {
                 validatedChannelDataResult.onSuccess { validatedData ->
                     val messageToClient: ByteBuffer? = when (validatedData.type) {
                         TYPES.OK -> {
-                            println("Received OK Message from client")
+                            println("Received OK Message")
                             println("Sending no response")
                             println("--------------------------------------------------")
                             null
                         }
                         TYPES.WRITE -> {
-                            println("Received WRITE Message from client")
+                            println("Received WRITE Message")
                             println("Writing content to the file...")
                             FileOutputStream(filePath, true).write(validatedData.content.array());
                             FileOutputStream(filePath, true).write(10);
@@ -51,7 +51,7 @@ fun main(args: Array<String>) {
                             composeOk();
                         }
                         TYPES.CLEAR -> {
-                            println("Received CLEAR Message from client")
+                            println("Received CLEAR Message")
                             println("Clearing file...")
                             FileOutputStream(filePath).write(ByteArray(0));
                             println("File cleared!")
@@ -59,14 +59,14 @@ fun main(args: Array<String>) {
                             composeOk()
                         }
                         TYPES.ERROR -> {
-                            println("Received ERROR Message from client")
+                            println("Received ERROR Message")
                             println("Error message: ${StandardCharsets.UTF_8.decode(validatedData.content.flip())}")
                             println("Sending no response")
                             println("--------------------------------------------------")
                             null
                         }
                         TYPES.PING -> {
-                            println("Received PING Message from client")
+                            println("Received PING Message")
                             println("Responding OK...")
                             composeOk()
                         }

@@ -1,6 +1,5 @@
 import java.net.StandardProtocolFamily
 import java.net.UnixDomainSocketAddress
-import java.nio.ByteBuffer
 import java.nio.channels.SocketChannel
 import java.nio.file.Path
 
@@ -35,13 +34,13 @@ fun main(args: Array<String>) {
             )
             // todo handle input properly
             val messageType = readlnOrNull()?.toByte();
+            if (messageType == CLOSE_CONNECTION_NUM) {
+                channel.close()
+                println("Connection closed")
+                return
+            }
 
             val messageToServer = when (messageType) {
-                CLOSE_CONNECTION_NUM -> {
-                    channel.close()
-                    println("Connection closed")
-                    return
-                }
                 TYPES.OK -> {
                     println("Sending OK...")
                     composeOk()
@@ -76,32 +75,30 @@ fun main(args: Array<String>) {
             channel.write(messageToServer);
             println("Message sent!")
 
-            if (messageType == TYPES.OK || messageType == TYPES.ERROR) {
-                println("--------------------------------------------------")
-                continue
-            }
-
-            val unvalidatedChannelDataResult = readChannelMessage(channel)
-            unvalidatedChannelDataResult.onSuccess { unvalidatedData ->
-                val validatedChannelDataResult = validateChannelData(unvalidatedData)
-                validatedChannelDataResult.onSuccess { validatedData ->
-                    when (validatedData.type) {
-                        TYPES.OK -> {
-                            println("Received OK from server")
+            // only wait for responses, if the message type expects them
+            if (messageType != TYPES.OK && messageType != TYPES.ERROR) {
+                val unvalidatedChannelDataResult = readChannelMessage(channel)
+                unvalidatedChannelDataResult.onSuccess { unvalidatedData ->
+                    val validatedChannelDataResult = validateChannelData(unvalidatedData)
+                    validatedChannelDataResult.onSuccess { validatedData ->
+                        when (validatedData.type) {
+                            TYPES.OK -> {
+                                println("Received OK from server")
+                            }
+                            TYPES.ERROR -> {
+                                println("Received ERROR from server")
+                                println("Error: ${validatedData.content}")
+                            }
+                            else -> println("Received unexpected message type from server")
                         }
-                        TYPES.ERROR -> {
-                            println("Received ERROR from server")
-                            println("Error: ${validatedData.content}")
-                        }
-                        else -> println("Received unexpected message type from server")
+                    }.onFailure { validationError ->
+                        println("Validation of the server response failed")
+                        println("Error: ${validationError.message}")
                     }
-                }.onFailure { validationError ->
-                    println("Validation of the server response failed")
-                    println("Error: ${validationError.message}")
+                }.onFailure { connectionClosedException ->
+                    println(connectionClosedException.message)
+                    return
                 }
-            }.onFailure { connectionClosedException ->
-                println(connectionClosedException.message)
-                return
             }
             println("--------------------------------------------------")
         }
