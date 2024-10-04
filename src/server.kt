@@ -1,8 +1,6 @@
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import java.io.FileOutputStream
-import java.io.IOException
 import java.net.StandardProtocolFamily
 import java.net.UnixDomainSocketAddress
 import java.nio.ByteBuffer
@@ -12,15 +10,30 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 
-const val FILE_IRREGULAR_MESSAGE = "The file is not regular"
-const val FILE_NOT_WRITABLE_MESSAGE = "The file cannot be written to"
+enum class Types(val value: Byte) {
+    OK(1),
+    WRITE(2),
+    CLEAR(3),
+    ERROR(4),
+    PING(5);
+
+    companion object {
+        fun fromByte(value: Byte) = entries.firstOrNull {it.value == value}
+    }
+}
 
 fun main(args: Array<String>) {
     if (args.size != 2) {
         throw RuntimeException("Usage: ./server [SOCKET_PATH] [FILE_PATH]")
     }
-    val socketPath = args[0];
-    Files.deleteIfExists(Path.of(socketPath));
+    val socketPath = Path.of(args[0]);
+
+    // check if a unix domain socket can be created at the specified socket path
+    if (!Files.isWritable(socketPath.parent)) {
+        println("permission denied to create a unix domain socket at the specified location")
+        return
+    }
+    Files.deleteIfExists(socketPath)
 
     val filePath = Path.of(args[1])
     // create file if it doesn't exist
@@ -29,11 +42,12 @@ fun main(args: Array<String>) {
     }
     // file must be regular to be written to and/or cleared
     if (!Files.isRegularFile(filePath)) {
-        println(FILE_IRREGULAR_MESSAGE)
+        println("The file is not regular")
         return
     }
+    // check if file can be written to
     if (!Files.isWritable(filePath)) {
-        println(FILE_NOT_WRITABLE_MESSAGE)
+        println("The file cannot be written to")
         return
     }
 

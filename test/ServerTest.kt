@@ -64,7 +64,7 @@ class ServerTest {
     @Test
     fun `server returns ok and then error if contentLength is shorter than content`() {
         val message = composeMessageWithIncorrectContentLength(Types.WRITE, "write this, please", -4)
-        // since the contentlength is shorter than the content, only a part of the content will be written
+        // since the contentLength is shorter than the content, only a part of the content will be read and written
         // since the server can't know that the actual content is longer, it returns OK
         assert(isServerResponseCorrect(message, Types.OK))
         // when the server then reads the stream again it finds the part of the content that was ignored previously
@@ -91,7 +91,7 @@ class ServerTest {
     @Test
     fun `server returns error on false random long input`() {
         val bytes = Random(1234).nextBytes(50)
-        // make sure that the type is unkown to avoid false positives
+        // make sure that the type is unknown to avoid false positives (unlikely but still...)
         bytes[0] = -1
         assert(isServerResponseCorrect(ByteBuffer.wrap(bytes), Types.ERROR))
     }
@@ -99,11 +99,10 @@ class ServerTest {
     @Test
     fun `server returns error on false random short input`() {
         val bytes = Random(1234).nextBytes(5)
-        // make sure that the type is unkown to avoid false positives
+        // same as before: use an unknown type to avoid false positives
         bytes[0] = -1
         assert(isServerResponseCorrect(ByteBuffer.wrap(bytes), Types.ERROR))
     }
-
 
     private fun isServerResponseCorrect(message: ByteBuffer, returnType: Types): Boolean {
         channel.write(message)

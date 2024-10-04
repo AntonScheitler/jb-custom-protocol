@@ -7,17 +7,6 @@ import java.nio.file.Path
 
 const val CLOSE_CONNECTION_NUM: Byte = 0;
 
-enum class Types(val value: Byte) {
-    OK(1),
-    WRITE(2),
-    CLEAR(3),
-    ERROR(4),
-    PING(5);
-
-    companion object {
-        fun fromByte(value: Byte) = entries.firstOrNull {it.value == value}
-    }
-}
 
 fun main(args: Array<String>) {
     val socketPath = args[0];
