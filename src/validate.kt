@@ -3,7 +3,9 @@ import java.nio.ByteBuffer
 class UnknownMessageTypeException: Exception("The type of this message is unknown")
 
 class MessageTooShortException: Exception("The message is too short to include a header")
+
 class ContentTooShortException: Exception("The content length specified in the header is greater than the actual content length")
+class ContentTooLongException: Exception("The content length exceeds Int.MAX_VALUE")
 
 abstract class ContentNotEmptyException(messageType: String): Exception("The content of messages with type $messageType must be empty!")
 class OkMessageContentNotEmptyException: ContentNotEmptyException("OK")
@@ -16,6 +18,10 @@ fun validateChannelMessage(data: ChannelData) : Result<ValidatedChannelData> {
     // check if reading the header worked properly
     if (data.numHeaderBytesRead < 8) {
         return Result.failure(MessageTooShortException())
+    }
+
+    if (data.contentLength < 0) {
+        return Result.failure(ContentTooLongException())
     }
 
     // check if reading the content worked properly

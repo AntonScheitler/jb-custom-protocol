@@ -3,13 +3,12 @@ import java.nio.channels.SocketChannel
 
 const val HEADER_SIZE = 8
 
-class ConnectionClosedException(): Exception("The connection has been closed by the other party. How rude!")
+class ConnectionClosedException(): Exception("The connection has been closed by the other party")
 
 data class ChannelData(val typeByte: Byte, val numHeaderBytesRead: Int, val numContentBytesRead: Int,
                        val contentLength: Int, val content: ByteBuffer)
 
 // Reads a message from the stream so it can be validated or throws an error if the client has closed the connection
-// todo more errors may appear when reading
 fun readChannelMessage(channel: SocketChannel): Result<ChannelData> {
     val headerBuffer = ByteBuffer.allocate(HEADER_SIZE);
     if (!channel.isOpen || !channel.isConnected) {
@@ -29,7 +28,8 @@ fun readChannelMessage(channel: SocketChannel): Result<ChannelData> {
         (elem.toUByte().toInt() shl ((3 - idx) * 8)) + acc
     }
 
-    val contentBuffer = ByteBuffer.allocate(contentLength);
+    // contentLength may overflow, in which case an empty buffer is allocated
+    val contentBuffer = ByteBuffer.allocate(if (contentLength > 0) contentLength else 0);
     val numContentBytesRead = channel.read(contentBuffer);
 
     return Result.success(

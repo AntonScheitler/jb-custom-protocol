@@ -11,7 +11,6 @@ import java.nio.channels.SocketChannel
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.io.path.pathString
 
 const val FILE_IRREGULAR_MESSAGE = "The file is not regular"
 const val FILE_NOT_WRITABLE_MESSAGE = "The file cannot be written to"
@@ -78,7 +77,7 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: Path, coroutine
                     Types.WRITE -> {
                         printlnWithCoroutineId(coroutineId, "Received WRITE Message")
                         // create file, if it has been deleted while the server runs
-                        val contentWriteResult = safeWriteFileWithNewline(validatedData.content, filePath, true)
+                        val contentWriteResult = safeWriteFile(validatedData.content, filePath, true)
                         var response = composeOk()
                         // respond OK if write was successful and ERROR otherwise
                         contentWriteResult.onSuccess { _ ->
@@ -109,7 +108,7 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: Path, coroutine
                     }
                     Types.ERROR -> {
                         printlnWithCoroutineId(coroutineId, "Received ERROR Message")
-                        printlnWithCoroutineId(coroutineId, "Error: ${StandardCharsets.UTF_8.decode(validatedData.content.flip())}")
+                        printlnWithCoroutineId(coroutineId, "Error: ${StandardCharsets.UTF_8.decode(validatedData.content)}")
                         printlnWithCoroutineId(coroutineId, "Sending no response")
                         null
                     }
@@ -120,30 +119,14 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: Path, coroutine
                     }
                 }
                 if (messageToClient != null) {
-                    val channelWriteResult = safeWriteChannel(messageToClient, clientChannel)
-                    // check if writing to the channel succeeded
-                    channelWriteResult.onSuccess { _ ->
-                        printlnWithCoroutineId(coroutineId, "Response sent!")
-                    // return if the channel cannot be written to
-                    }.onFailure { writeException ->
-                        println(writeException.message)
-                        return
-                    }
+                    clientChannel.write(messageToClient)
                 }
             }.onFailure { validationException ->
                 // reply with an error if the validation has failed
                 printlnWithCoroutineId(coroutineId, "Validation of the message failed")
                 printlnWithCoroutineId(coroutineId, "Error: ${validationException.message}")
                 printlnWithCoroutineId(coroutineId, "Responding with ERROR")
-                // check if writing to the channel succeeded
-                val channelWriteResult = safeWriteChannel(composeError(validationException.message), clientChannel)
-                channelWriteResult.onSuccess { _ ->
-                    printlnWithCoroutineId(coroutineId, "Response sent!")
-                // return if the channel cannot be written to
-                }.onFailure { writeException ->
-                    printlnWithCoroutineId(coroutineId, writeException.message);
-                    return
-                }
+                clientChannel.write(composeError(validationException.message))
             }
         }.onFailure { connectionClosedException ->
             printlnWithCoroutineId(coroutineId, connectionClosedException.message ?: "")

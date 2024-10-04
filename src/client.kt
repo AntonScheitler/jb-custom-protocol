@@ -2,6 +2,7 @@ import java.lang.reflect.Type
 import java.net.StandardProtocolFamily
 import java.net.UnixDomainSocketAddress
 import java.nio.channels.SocketChannel
+import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
 const val CLOSE_CONNECTION_NUM: Byte = 0;
@@ -98,7 +99,7 @@ fun main(args: Array<String>) {
                             }
                             Types.ERROR -> {
                                 println("Received ERROR from server")
-                                println("Error: ${validatedData.content}")
+                                println("Error: ${StandardCharsets.UTF_8.decode(validatedData.content)}")
                             }
                             else -> println("Received unexpected message type from server")
                         }
