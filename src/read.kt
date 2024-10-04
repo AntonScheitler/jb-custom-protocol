@@ -5,11 +5,11 @@ const val HEADER_SIZE = 8
 
 class ConnectionClosedException(): Exception("The connection has been closed by the other party. How rude!")
 
-data class ChannelData(val type: Byte, val numHeaderBytesRead: Int, val numContentBytesRead: Int,
+data class ChannelData(val typeByte: Byte, val numHeaderBytesRead: Int, val numContentBytesRead: Int,
                        val contentLength: Int, val content: ByteBuffer)
 
 // Reads a message from the stream so it can be validated or throws an error if the client has closed the connection
-// todo more error may appear
+// todo more errors may appear when reading
 fun readChannelMessage(channel: SocketChannel): Result<ChannelData> {
     val headerBuffer = ByteBuffer.allocate(HEADER_SIZE);
     val numHeaderBytesRead = channel.read(headerBuffer);

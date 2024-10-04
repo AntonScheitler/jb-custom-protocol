@@ -1,3 +1,4 @@
+import java.lang.reflect.Type
 import java.net.StandardProtocolFamily
 import java.net.UnixDomainSocketAddress
 import java.nio.channels.SocketChannel
@@ -5,12 +6,16 @@ import java.nio.file.Path
 
 const val CLOSE_CONNECTION_NUM: Byte = 0;
 
-object TYPES {
-    const val OK: Byte = 1
-    const val WRITE: Byte = 2
-    const val CLEAR: Byte = 3
-    const val ERROR: Byte = 4
-    const val PING: Byte = 5
+enum class Types(val value: Byte) {
+    OK(1),
+    WRITE(2),
+    CLEAR(3),
+    ERROR(4),
+    PING(5);
+
+    companion object {
+        fun fromByte(value: Byte) = entries.firstOrNull {it.value == value}
+    }
 }
 
 fun main(args: Array<String>) {
@@ -26,42 +31,48 @@ fun main(args: Array<String>) {
         while (channel.isOpen) {
             println(
                 "To send a message to the server, type the corresponding number, or type 0 to close the connection\n" +
-                "${TYPES.OK} -> Ok\n" +
-                "${TYPES.WRITE} -> Write\n" +
-                "${TYPES.CLEAR} -> Clear\n" +
-                "${TYPES.ERROR} -> Error\n" +
-                "${TYPES.PING} -> Ping"
+                "${Types.OK.value} -> Ok\n" +
+                "${Types.WRITE.value} -> Write\n" +
+                "${Types.CLEAR.value} -> Clear\n" +
+                "${Types.ERROR.value} -> Error\n" +
+                "${Types.PING.value} -> Ping"
             )
             // todo handle input properly
-            val messageType = readlnOrNull()?.toByte();
-            if (messageType == CLOSE_CONNECTION_NUM) {
+            val messageTypeInput = readlnOrNull()?.toByte();
+
+            if (messageTypeInput == CLOSE_CONNECTION_NUM) {
                 channel.close()
                 println("Connection closed")
                 return
             }
 
+            val messageType = Types.fromByte(messageTypeInput ?: -1)
+            if (messageType == null){
+                println("Unknown message type")
+            }
+
             val messageToServer = when (messageType) {
-                TYPES.OK -> {
+                Types.OK -> {
                     println("Sending OK...")
                     composeOk()
                 }
-                TYPES.WRITE -> {
+                Types.WRITE -> {
                     println("A write message needs content. Please enter it now:")
                     val content = readlnOrNull() ?: ""
                     println("Sending WRITE...")
                     composeWrite(content)
                 }
-                TYPES.CLEAR -> {
+                Types.CLEAR -> {
                     println("Sending CLEAR...")
                     composeClear()
                 }
-                TYPES.ERROR -> {
+                Types.ERROR -> {
                     println("An error message can be specified. Please enter it now or hit enter to leave it empty:")
                     val errorMessage = readlnOrNull() ?: ""
                     println("Sending ERROR...")
                     composeError(errorMessage)
                 }
-                TYPES.PING -> {
+                Types.PING -> {
                     println("Sending PING...")
                     composePing()
                 }
@@ -76,16 +87,16 @@ fun main(args: Array<String>) {
             println("Message sent!")
 
             // only wait for responses, if the message type expects them
-            if (messageType != TYPES.OK && messageType != TYPES.ERROR) {
+            if (messageType != Types.OK && messageType != Types.ERROR) {
                 val unvalidatedChannelDataResult = readChannelMessage(channel)
                 unvalidatedChannelDataResult.onSuccess { unvalidatedData ->
-                    val validatedChannelDataResult = validateChannelData(unvalidatedData)
+                    val validatedChannelDataResult = validateChannelMessage(unvalidatedData)
                     validatedChannelDataResult.onSuccess { validatedData ->
                         when (validatedData.type) {
-                            TYPES.OK -> {
+                            Types.OK -> {
                                 println("Received OK from server")
                             }
-                            TYPES.ERROR -> {
+                            Types.ERROR -> {
                                 println("Received ERROR from server")
                                 println("Error: ${validatedData.content}")
                             }

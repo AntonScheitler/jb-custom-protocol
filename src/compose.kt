@@ -1,36 +1,36 @@
 import java.nio.ByteBuffer
 
 fun composeOk(): ByteBuffer {
-    return composeMessageWithoutContent(TYPES.OK);
+    return composeMessageWithoutContent(Types.OK);
 }
 
 fun composeWrite(content: String): ByteBuffer {
-    return composeMessageWithContent(TYPES.WRITE, content);
+    return composeMessageWithContent(Types.WRITE, content);
 }
 
 fun composeClear(): ByteBuffer {
-    return composeMessageWithoutContent(TYPES.CLEAR);
+    return composeMessageWithoutContent(Types.CLEAR);
 }
 
 
 fun composeError(errorMessage: String = ""): ByteBuffer {
-    return composeMessageWithContent(TYPES.ERROR, errorMessage);
+    return composeMessageWithContent(Types.ERROR, errorMessage);
 }
 
 fun composePing(): ByteBuffer {
-    return composeMessageWithoutContent(TYPES.PING);
+    return composeMessageWithoutContent(Types.PING);
 }
 
-private fun composeMessageWithoutContent(messageType: Byte): ByteBuffer {
+private fun composeMessageWithoutContent(messageType: Types): ByteBuffer {
     val bytes = ByteArray(8);
-    bytes[0] = messageType;
+    bytes[0] = messageType.value;
     bytes.fill(0, 1, 8);
     return ByteBuffer.wrap(bytes);
 }
 
-private fun composeMessageWithContent(messageType: Byte, content: String): ByteBuffer {
+private fun composeMessageWithContent(messageType: Types, content: String): ByteBuffer {
     val bytes = ByteArray(8 + content.length);
-    bytes[0] = messageType;
+    bytes[0] = messageType.value;
     bytes.fill(0, 1, 4);
 
     // using .toByte() means that there will be an overflow for numbers greater than 127

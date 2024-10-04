@@ -55,42 +55,47 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: String, corouti
         val unvalidatedChannelDataResult = readChannelMessage(clientChannel);
         unvalidatedChannelDataResult.onSuccess { unvalidatedData ->
             // validate the message just read
-            val validatedChannelDataResult = validateChannelData(unvalidatedData)
+            val validatedChannelDataResult = validateChannelMessage(unvalidatedData)
             validatedChannelDataResult.onSuccess { validatedData ->
                 // respond according to the type of the message (if it is valid)
                 val messageToClient: ByteBuffer? = when (validatedData.type) {
-                    TYPES.OK -> {
+                    Types.OK -> {
                         printlnWithCoroutineId(coroutineId, "Received OK Message")
                         printlnWithCoroutineId(coroutineId, "Sending no response")
                         null
                     }
-                    TYPES.WRITE -> {
+                    Types.WRITE -> {
                         printlnWithCoroutineId(coroutineId, "Received WRITE Message")
                         // todo possible IO Exception
-                        FileOutputStream(filePath, true).write(validatedData.content.array());
-                        FileOutputStream(filePath, true).write(10);
-                        printlnWithCoroutineId(coroutineId, "Responding OK...")
-                        composeOk();
+                        if (!Files.isRegularFile(Path.of(filePath))) {
+                            println("File no longer exists or is no longer regular")
+                            composeError("File no longer exists or is no longer regular")
+                        } else {
+                            FileOutputStream(filePath, true).write(validatedData.content.array());
+                            FileOutputStream(filePath, true).write(10)
+                            printlnWithCoroutineId(coroutineId, "Write successful")
+                            printlnWithCoroutineId(coroutineId, "Responding OK...")
+                            composeOk()
+                        }
                     }
-                    TYPES.CLEAR -> {
+                    Types.CLEAR -> {
                         printlnWithCoroutineId(coroutineId, "Received CLEAR Message")
                         // todo possible IO Exception
                         FileOutputStream(filePath).write(ByteArray(0));
                         printlnWithCoroutineId(coroutineId, "Responding OK...")
                         composeOk()
                     }
-                    TYPES.ERROR -> {
+                    Types.ERROR -> {
                         printlnWithCoroutineId(coroutineId, "Received ERROR Message")
                         printlnWithCoroutineId(coroutineId, "Error: ${StandardCharsets.UTF_8.decode(validatedData.content.flip())}")
                         printlnWithCoroutineId(coroutineId, "Sending no response")
                         null
                     }
-                    TYPES.PING -> {
+                    Types.PING -> {
                         printlnWithCoroutineId(coroutineId, "Received PING Message")
                         printlnWithCoroutineId(coroutineId, "Responding OK...")
                         composeOk()
                     }
-                    else -> composeError(UnknownMessageTypeException().message ?: "")
                 }
                 if (messageToClient != null) {
                     // todo might fail
