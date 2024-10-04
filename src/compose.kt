@@ -13,8 +13,8 @@ fun composeClear(): ByteBuffer {
 }
 
 
-fun composeError(errorMessage: String = ""): ByteBuffer {
-    return composeMessageWithContent(Types.ERROR, errorMessage);
+fun composeError(errorMessage: String? = ""): ByteBuffer {
+    return composeMessageWithContent(Types.ERROR, errorMessage ?: "");
 }
 
 fun composePing(): ByteBuffer {

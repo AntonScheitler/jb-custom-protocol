@@ -13,7 +13,10 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.pathString
 
-fun main(args: Array<String>) = runBlocking {
+const val FILE_IRREGULAR_MESSAGE = "The file is not regular"
+const val FILE_NOT_WRITABLE_MESSAGE = "The file cannot be written to"
+
+fun main(args: Array<String>) {
     if (args.size != 2) {
         throw RuntimeException("Usage: ./server [SOCKET_PATH] [FILE_PATH]")
     }
@@ -27,27 +30,35 @@ fun main(args: Array<String>) = runBlocking {
     }
     // file must be regular to be written to and/or cleared
     if (!Files.isRegularFile(filePath)) {
-        throw IOException("File must be regular")
+        println(FILE_IRREGULAR_MESSAGE)
+        return
+    }
+    if (!Files.isWritable(filePath)) {
+        println(FILE_NOT_WRITABLE_MESSAGE)
+        return
     }
 
-    // bind to the socket
-    val address = UnixDomainSocketAddress.of(socketPath);
-    ServerSocketChannel.open(StandardProtocolFamily.UNIX).bind(address).use { serverChannel ->
-        println("Server listening at address: ${serverChannel.localAddress}");
 
-        // listen for incoming connections
-        var id = 0
-        while (true) {
-            val clientChannel = serverChannel.accept()
-            launch(Dispatchers.IO) {
-                handleClient(clientChannel, filePath.pathString, id)
+    runBlocking {
+        // bind to the socket
+        val address = UnixDomainSocketAddress.of(socketPath);
+        ServerSocketChannel.open(StandardProtocolFamily.UNIX).bind(address).use { serverChannel ->
+            println("Server listening at address: ${serverChannel.localAddress}");
+
+            // listen for incoming connections
+            var id = 0
+            while (true) {
+                val clientChannel = serverChannel.accept()
+                launch(Dispatchers.IO) {
+                    handleClient(clientChannel, filePath, id)
+                }
+                id++
             }
-            id++
         }
     }
 }
 
-suspend fun handleClient(clientChannel: SocketChannel, filePath: String, coroutineId: Int) {
+suspend fun handleClient(clientChannel: SocketChannel, filePath: Path, coroutineId: Int) {
     printlnWithCoroutineId(coroutineId, "Client connection accepted")
     printlnWithCoroutineId(coroutineId, "--------------------------------------------------")
     while (clientChannel.isOpen) {
@@ -66,24 +77,35 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: String, corouti
                     }
                     Types.WRITE -> {
                         printlnWithCoroutineId(coroutineId, "Received WRITE Message")
-                        // todo possible IO Exception
-                        if (!Files.isRegularFile(Path.of(filePath))) {
-                            println("File no longer exists or is no longer regular")
-                            composeError("File no longer exists or is no longer regular")
-                        } else {
-                            FileOutputStream(filePath, true).write(validatedData.content.array());
-                            FileOutputStream(filePath, true).write(10)
+                        // create file, if it has been deleted while the server runs
+                        val contentWriteResult = safeWriteFileWithNewline(validatedData.content, filePath, true)
+                        var response = composeOk()
+                        // respond OK if write was successful and ERROR otherwise
+                        contentWriteResult.onSuccess { _ ->
                             printlnWithCoroutineId(coroutineId, "Write successful")
                             printlnWithCoroutineId(coroutineId, "Responding OK...")
-                            composeOk()
+                        }.onFailure { writeException ->
+                            printlnWithCoroutineId(coroutineId, writeException.message ?: "Write failed")
+                            printlnWithCoroutineId(coroutineId, "Responding with ERROR...")
+                            response = composeError(writeException.message ?: "Write failed")
                         }
+                        response
                     }
                     Types.CLEAR -> {
                         printlnWithCoroutineId(coroutineId, "Received CLEAR Message")
-                        // todo possible IO Exception
-                        FileOutputStream(filePath).write(ByteArray(0));
-                        printlnWithCoroutineId(coroutineId, "Responding OK...")
-                        composeOk()
+                        // create file, if it has been deleted while the server runs
+                        val fileWriteResult = safeWriteFile(ByteBuffer.wrap(ByteArray(0)), filePath, false)
+                        var response = composeOk()
+                        // respond OK if write was successful and ERROR otherwise
+                        fileWriteResult.onSuccess { _ ->
+                            printlnWithCoroutineId(coroutineId, "Clear successful")
+                            printlnWithCoroutineId(coroutineId, "Responding OK...")
+                        }.onFailure { writeException ->
+                            printlnWithCoroutineId(coroutineId, writeException.message ?: "Clear failed")
+                            printlnWithCoroutineId(coroutineId, "Responding with ERROR...")
+                            response = composeError(writeException.message ?: "Clear failed")
+                        }
+                        response
                     }
                     Types.ERROR -> {
                         printlnWithCoroutineId(coroutineId, "Received ERROR Message")
@@ -98,20 +120,31 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: String, corouti
                     }
                 }
                 if (messageToClient != null) {
-                    // todo might fail
-                    clientChannel.write(messageToClient)
-                    printlnWithCoroutineId(coroutineId, "Response sent!")
+                    val channelWriteResult = safeWriteChannel(messageToClient, clientChannel)
+                    // check if writing to the channel succeeded
+                    channelWriteResult.onSuccess { _ ->
+                        printlnWithCoroutineId(coroutineId, "Response sent!")
+                    // return if the channel cannot be written to
+                    }.onFailure { writeException ->
+                        println(writeException.message)
+                        return
+                    }
                 }
             }.onFailure { validationException ->
                 // reply with an error if the validation has failed
                 printlnWithCoroutineId(coroutineId, "Validation of the message failed")
                 printlnWithCoroutineId(coroutineId, "Error: ${validationException.message}")
                 printlnWithCoroutineId(coroutineId, "Responding with ERROR")
-                // todo might fail
-                clientChannel.write(composeError(validationException.message ?: ""))
-                printlnWithCoroutineId(coroutineId, "Response sent!")
+                // check if writing to the channel succeeded
+                val channelWriteResult = safeWriteChannel(composeError(validationException.message), clientChannel)
+                channelWriteResult.onSuccess { _ ->
+                    printlnWithCoroutineId(coroutineId, "Response sent!")
+                // return if the channel cannot be written to
+                }.onFailure { writeException ->
+                    printlnWithCoroutineId(coroutineId, writeException.message);
+                    return
+                }
             }
-            // todo other exceptions besides connectionClosed may appear (faulty client, doesn't read buffer and closes connection)
         }.onFailure { connectionClosedException ->
             printlnWithCoroutineId(coroutineId, connectionClosedException.message ?: "")
             return
@@ -120,6 +153,6 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: String, corouti
     }
 }
 
-fun printlnWithCoroutineId(coroutineId: Int, string: String) {
+fun printlnWithCoroutineId(coroutineId: Int, string: String?) {
     println("[$coroutineId] $string")
 }

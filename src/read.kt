@@ -12,11 +12,14 @@ data class ChannelData(val typeByte: Byte, val numHeaderBytesRead: Int, val numC
 // todo more errors may appear when reading
 fun readChannelMessage(channel: SocketChannel): Result<ChannelData> {
     val headerBuffer = ByteBuffer.allocate(HEADER_SIZE);
+    if (!channel.isOpen || !channel.isConnected) {
+        return Result.failure(ConnectionClosedException())
+    }
     val numHeaderBytesRead = channel.read(headerBuffer);
 
     // if the number returned by channel.read() is -1, then end-of-stream has been reached, which means that the client has closed the connection
     if (numHeaderBytesRead == -1) {
-        return  Result.failure(ConnectionClosedException())
+        return Result.failure(ConnectionClosedException())
     }
 
     // elem.toUByte() is necessary, because negative numbers may appear in headerBuffer[4..7] due to an overflow of Byte
@@ -30,6 +33,6 @@ fun readChannelMessage(channel: SocketChannel): Result<ChannelData> {
     val numContentBytesRead = channel.read(contentBuffer);
 
     return Result.success(
-        ChannelData(headerBuffer.flip().get(), numHeaderBytesRead, numContentBytesRead, contentLength, contentBuffer)
+        ChannelData(headerBuffer.flip().get(), numHeaderBytesRead, numContentBytesRead, contentLength, contentBuffer.flip())
     )
 }
