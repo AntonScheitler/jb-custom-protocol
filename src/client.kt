@@ -1,4 +1,3 @@
-import java.lang.reflect.Type
 import java.net.StandardProtocolFamily
 import java.net.UnixDomainSocketAddress
 import java.nio.channels.SocketChannel
@@ -7,18 +6,22 @@ import java.nio.file.Path
 
 const val CLOSE_CONNECTION_NUM: Byte = 0;
 
-
+/** runs a client that connects to the specified socket and sends messages to the server.
+ * this can be used to try out some of the server behavior in an interactive way.
+ * however, to see if the server really behaves properly, tests are better suited
+ */
 fun main(args: Array<String>) {
     val socketPath = args[0];
     val address = UnixDomainSocketAddress.of(Path.of(socketPath));
 
+    // connect to the socket
     SocketChannel.open(StandardProtocolFamily.UNIX).use { channel ->
-        // todo handle connections properly (validation, check if open, etc)
         channel.connect(address);
         println("Successfully connected to the server!")
         println("--------------------------------------------------")
 
         while (channel.isOpen) {
+            // get input from the user to generate the message from
             println(
                 "To send a message to the server, type the corresponding number, or type 0 to close the connection\n" +
                 "${Types.OK.value} -> Ok\n" +
@@ -27,20 +30,22 @@ fun main(args: Array<String>) {
                 "${Types.ERROR.value} -> Error\n" +
                 "${Types.PING.value} -> Ping"
             )
-            // todo handle input properly
-            val messageTypeInput = readlnOrNull()?.toByte();
+            val messageTypeInput = readlnOrNull()?.toByte()
 
+            // check if the client wants to close the connection
             if (messageTypeInput == CLOSE_CONNECTION_NUM) {
                 channel.close()
                 println("Connection closed")
                 return
             }
 
+            // get the Type based on the input
             val messageType = Types.fromByte(messageTypeInput ?: -1)
             if (messageType == null){
                 println("Unknown message type")
             }
 
+            // send a message corresponding to the type
             val messageToServer = when (messageType) {
                 Types.OK -> {
                     println("Sending OK...")
@@ -76,10 +81,12 @@ fun main(args: Array<String>) {
             channel.write(messageToServer);
             println("Message sent!")
 
-            // only wait for responses, if the message type expects them
+            // since both the client and the server adhere to the standard, there won't be a response to an OK or ERROR
             if (messageType != Types.OK && messageType != Types.ERROR) {
+                // read from the channel
                 val unvalidatedChannelDataResult = readChannelMessage(channel)
                 unvalidatedChannelDataResult.onSuccess { unvalidatedData ->
+                    // validate the message
                     val validatedChannelDataResult = validateChannelMessage(unvalidatedData)
                     validatedChannelDataResult.onSuccess { validatedData ->
                         when (validatedData.type) {

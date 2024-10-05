@@ -1,26 +1,51 @@
 import java.nio.ByteBuffer
 
+/** composes an OK message that conforms with the standard
+ *
+ * @return the OK message in the form of a [ByteBuffer]
+ */
 fun composeOk(): ByteBuffer {
     return composeMessageWithoutContent(Types.OK);
 }
 
+/** composes a WRITE message that conforms with the standard
+ *
+ * @return the WRITE message in the form of a [ByteBuffer]
+ */
 fun composeWrite(content: String): ByteBuffer {
     return composeMessageWithContent(Types.WRITE, content);
 }
 
+/** composes a CLEAR message that conforms with the standard
+ *
+ * @return the CLEAR message in the form of a [ByteBuffer]
+ */
 fun composeClear(): ByteBuffer {
     return composeMessageWithoutContent(Types.CLEAR);
 }
 
-
+/** composes an ERROR message that conforms with the standard
+ *
+ * @return the ERROR message in the form of a [ByteBuffer]
+ */
 fun composeError(errorMessage: String? = ""): ByteBuffer {
     return composeMessageWithContent(Types.ERROR, errorMessage ?: "");
 }
 
+/** composes a PING message that conforms with the standard
+ *
+ * @return the PING message in the form of a [ByteBuffer]
+ */
 fun composePing(): ByteBuffer {
     return composeMessageWithoutContent(Types.PING);
 }
 
+/** composes a message that has no content
+ *
+ * @param messageType the type of the message
+ *
+ * @return the composed message in the form of a [ByteBuffer]
+ */
 private fun composeMessageWithoutContent(messageType: Types): ByteBuffer {
     val bytes = ByteArray(8);
     bytes[0] = messageType.value;
@@ -28,6 +53,13 @@ private fun composeMessageWithoutContent(messageType: Types): ByteBuffer {
     return ByteBuffer.wrap(bytes);
 }
 
+/** composes a message with some content
+ *
+ * @param messageType the type of the message
+ * @param content the content of the message
+ *
+ * @return the composed message in the form of a [ByteBuffer]
+ */
 private fun composeMessageWithContent(messageType: Types, content: String): ByteBuffer {
     val bytes = ByteArray(8 + content.length);
     bytes[0] = messageType.value;

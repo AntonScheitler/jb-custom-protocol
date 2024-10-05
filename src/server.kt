@@ -18,13 +18,20 @@ enum class Types(val value: Byte) {
     PING(5);
 
     companion object {
+        /** returns a member of [Types] based on the provided value
+         *
+         * @param value the value to get the Type from
+         *
+         * @return the member of [Types] associated with the provided value
+         */
         fun fromByte(value: Byte) = entries.firstOrNull {it.value == value}
     }
 }
 
 fun main(args: Array<String>) {
     if (args.size != 2) {
-        throw RuntimeException("Usage: ./server [SOCKET_PATH] [FILE_PATH]")
+        println("Usage: ./server [SOCKET_PATH] [FILE_PATH]")
+        return
     }
     val socketPath = Path.of(args[0]);
 
@@ -71,6 +78,12 @@ fun main(args: Array<String>) {
     }
 }
 
+/** handles the reading of and responding to messages from a channel
+ *
+ * @param clientChannel the channel to read from and respond to
+ * @param filePath the path to the file to write/clear
+ * @param coroutineId the id for the coroutine that handles this client
+ */
 suspend fun handleClient(clientChannel: SocketChannel, filePath: Path, coroutineId: Int) {
     printlnWithCoroutineId(coroutineId, "Client connection accepted")
     printlnWithCoroutineId(coroutineId, "--------------------------------------------------")
@@ -78,19 +91,19 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: Path, coroutine
         // read message from the channel
         val unvalidatedChannelDataResult = readChannelMessage(clientChannel);
         unvalidatedChannelDataResult.onSuccess { unvalidatedData ->
-            // validate the message just read
+            // validate the message from the channel
             val validatedChannelDataResult = validateChannelMessage(unvalidatedData)
             validatedChannelDataResult.onSuccess { validatedData ->
-                // respond according to the type of the message (if it is valid)
+                // respond according to the type and content of the message
                 val messageToClient: ByteBuffer? = when (validatedData.type) {
                     Types.OK -> {
                         printlnWithCoroutineId(coroutineId, "Received OK Message")
                         printlnWithCoroutineId(coroutineId, "Sending no response")
-                        null
+                        null // no response to OK
                     }
                     Types.WRITE -> {
                         printlnWithCoroutineId(coroutineId, "Received WRITE Message")
-                        // create file, if it has been deleted while the server runs
+                        // the file might be manipulated while the server runs, which is why safeWriteFile is used
                         val contentWriteResult = safeWriteFile(validatedData.content, filePath, true)
                         var response = composeOk()
                         // respond OK if write was successful and ERROR otherwise
@@ -106,7 +119,7 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: Path, coroutine
                     }
                     Types.CLEAR -> {
                         printlnWithCoroutineId(coroutineId, "Received CLEAR Message")
-                        // create file, if it has been deleted while the server runs
+                        // again, the file may be changed while the server runs
                         val fileWriteResult = safeWriteFile(ByteBuffer.wrap(ByteArray(0)), filePath, false)
                         var response = composeOk()
                         // respond OK if write was successful and ERROR otherwise
@@ -124,7 +137,7 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: Path, coroutine
                         printlnWithCoroutineId(coroutineId, "Received ERROR Message")
                         printlnWithCoroutineId(coroutineId, "Error: ${StandardCharsets.UTF_8.decode(validatedData.content)}")
                         printlnWithCoroutineId(coroutineId, "Sending no response")
-                        null
+                        null // no response to ERROR
                     }
                     Types.PING -> {
                         printlnWithCoroutineId(coroutineId, "Received PING Message")
@@ -132,8 +145,10 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: Path, coroutine
                         composeOk()
                     }
                 }
+                // write response to the channel if needed
                 if (messageToClient != null) {
                     clientChannel.write(messageToClient)
+                    printlnWithCoroutineId(coroutineId, "Response sent!")
                 }
             }.onFailure { validationException ->
                 // reply with an error if the validation has failed
@@ -143,6 +158,7 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: Path, coroutine
                 clientChannel.write(composeError(validationException.message))
             }
         }.onFailure { connectionClosedException ->
+            // read will fail, if the other party has closed the connection
             printlnWithCoroutineId(coroutineId, connectionClosedException.message ?: "")
             return
         }
@@ -150,6 +166,11 @@ suspend fun handleClient(clientChannel: SocketChannel, filePath: Path, coroutine
     }
 }
 
+/** prints a statement along with the id of the associated coroutine
+ *
+ * @param coroutineId the id of the coroutine
+ * @param string the statement to be printed
+ */
 fun printlnWithCoroutineId(coroutineId: Int, string: String?) {
     println("[$coroutineId] $string")
 }
