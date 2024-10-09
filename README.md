@@ -8,7 +8,7 @@ The server needs to be running for communication to work
 ### Communicating with the server
 ###### Client
 Running client.kt will start a client, which sends messages to the server and prints the server's response to them.
-Those messages conform to the standard of the test tasks. To send invalid messages, tests can be used.
-The server can handle multiple clients at once, so they can all communicate with the server at time
+Those messages conform to the standard of the test task. To send invalid messages, tests can be used.
+The server can handle multiple clients at once, so they can all communicate with the server at the same time
 ###### Test
 Running ServerTest will sind a variety of messages, both valid and invalid, to the server and test the server's responses.
