@@ -11,4 +11,4 @@ Running client.kt will start a client, which sends messages to the server and pr
 Those messages conform to the standard of the test task. To send invalid messages, tests can be used.
 The server can handle multiple clients at once, so they can all communicate with the server at the same time
 ###### Test
-Running ServerTest will sind a variety of messages, both valid and invalid, to the server and test the server's responses.
+Running ServerTest will send a variety of messages, both valid and invalid, to the server and test the server's responses.
