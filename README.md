@@ -12,4 +12,5 @@ Running client.kt will start a client, which sends messages to the server and pr
 Those messages conform to the standard of the test task. To send invalid messages, tests can be used.
 The server can handle multiple clients at once, so they can all communicate with the server at the same time
 ###### Test
+The ServerTest class contains a socketPath variable, which needs to be adjusted to match the socket, the server is listening on.
 Running ServerTest will send a variety of messages, both valid and invalid, to the server and test the server's responses.
