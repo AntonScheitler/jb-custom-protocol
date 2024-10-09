@@ -1,6 +1,7 @@
 # jb-custom-protocol
 
 ### Setup
+Open this project in IntelliJ.
 Running server.kt will start a server, which binds to a unix domain socket, reads messages and responds accordingly.
 The path to the unix domain socket and to the file are the first and second program arguments respectively.
 The server needs to be running for communication to work
